@@ -13,13 +13,21 @@ A full-stack Job Portal built with ASP.NET Core Web API, React, PostgreSQL and D
 
 ## Current Database Structure
 
-The application uses five main tables:
+The application uses five core business tables:
 
 - Users
 - CandidateProfiles
 - Companies
 - Jobs
 - Applications
+
+Skills are normalized using three supporting tables:
+
+- Skills
+- CandidateProfileSkills
+- JobSkills
+
+CandidateProfileSkills connects candidates to their skills, while JobSkills connects jobs to their required skills. This structure supports exact, indexed skill filtering and candidate-to-job skill matching.
 
 ## Prerequisites
 
@@ -29,6 +37,7 @@ Install the following:
 - Docker Desktop with WSL 2
 - Git
 - VS Code
+- pgAdmin 4 (optional, for database inspection and query verification)
 
 ## Database Setup
 

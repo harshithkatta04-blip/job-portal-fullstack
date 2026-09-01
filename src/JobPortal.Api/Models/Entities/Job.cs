@@ -20,8 +20,6 @@ public class Job
 
     public string? SalaryRange { get; set; }
 
-    public string SkillsRequired { get; set; } = string.Empty;
-
     public DateTime ApplicationDeadline { get; set; }
 
     public JobStatus Status { get; set; } = JobStatus.Open;
@@ -29,6 +27,9 @@ public class Job
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<JobSkill> JobSkills { get; set; }
+         = new List<JobSkill>();
 
     public Company Company { get; set; } = null!;
 }

@@ -10,8 +10,6 @@ public class CandidateProfile
 
     public string Location { get; set; } = string.Empty;
 
-    public string Skills { get; set; } = string.Empty;
-
     public string Education { get; set; } = string.Empty;
 
     public int ExperienceYears { get; set; }
@@ -19,6 +17,9 @@ public class CandidateProfile
     public string ResumeUrl { get; set; } = string.Empty;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<CandidateProfileSkill> CandidateProfileSkills { get; set; }
+    = new List<CandidateProfileSkill>();
 
     public User User { get; set; } = null!;
 }

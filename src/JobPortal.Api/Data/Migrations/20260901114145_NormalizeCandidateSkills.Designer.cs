@@ -3,6 +3,7 @@ using System;
 using JobPortal.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace JobPortal.Api.Data.Migrations
 {
     [DbContext(typeof(JobPortalDbContext))]
-    partial class JobPortalDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260901114145_NormalizeCandidateSkills")]
+    partial class NormalizeCandidateSkills
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -223,6 +226,11 @@ namespace JobPortal.Api.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("SkillsRequired")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -246,21 +254,6 @@ namespace JobPortal.Api.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_Jobs_ExperienceRequiredYears", "\"ExperienceRequiredYears\" >= 0");
                         });
-                });
-
-            modelBuilder.Entity("JobPortal.Api.Models.Entities.JobSkill", b =>
-                {
-                    b.Property<int>("JobId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SkillId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("JobId", "SkillId");
-
-                    b.HasIndex("SkillId");
-
-                    b.ToTable("JobSkills");
                 });
 
             modelBuilder.Entity("JobPortal.Api.Models.Entities.Skill", b =>
@@ -401,40 +394,14 @@ namespace JobPortal.Api.Data.Migrations
                     b.Navigation("Company");
                 });
 
-            modelBuilder.Entity("JobPortal.Api.Models.Entities.JobSkill", b =>
-                {
-                    b.HasOne("JobPortal.Api.Models.Entities.Job", "Job")
-                        .WithMany("JobSkills")
-                        .HasForeignKey("JobId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("JobPortal.Api.Models.Entities.Skill", "Skill")
-                        .WithMany("JobSkills")
-                        .HasForeignKey("SkillId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Job");
-
-                    b.Navigation("Skill");
-                });
-
             modelBuilder.Entity("JobPortal.Api.Models.Entities.CandidateProfile", b =>
                 {
                     b.Navigation("CandidateProfileSkills");
                 });
 
-            modelBuilder.Entity("JobPortal.Api.Models.Entities.Job", b =>
-                {
-                    b.Navigation("JobSkills");
-                });
-
             modelBuilder.Entity("JobPortal.Api.Models.Entities.Skill", b =>
                 {
                     b.Navigation("CandidateProfileSkills");
-
-                    b.Navigation("JobSkills");
                 });
 #pragma warning restore 612, 618
         }

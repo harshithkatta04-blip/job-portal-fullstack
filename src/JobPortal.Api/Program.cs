@@ -1,3 +1,4 @@
+using Microsoft.OpenApi;
 using System.Text;
 using System.Text.Json.Serialization;
 using JobPortal.Api.Data;
@@ -62,13 +63,30 @@ builder.Services
             new JsonStringEnumConverter());
     });
 
-builder.Services.AddOpenApi();
+builder.Services.AddSwaggerGen(options =>
+   { options.CustomSchemaIds(type =>
+         type.FullName!.Replace('+', '.'));
+    options.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Enter the JWT token only."
+    });
+
+    options.AddSecurityRequirement(document =>
+        new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecuritySchemeReference("bearer", document)] = []
+        });
+});
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();

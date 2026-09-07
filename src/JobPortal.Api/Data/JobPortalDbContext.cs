@@ -30,7 +30,7 @@ public class JobPortalDbContext : DbContext
         ConfigureUser(modelBuilder);
         ConfigureCandidateProfile(modelBuilder);
         ConfigureSkill(modelBuilder);
-       ConfigureCandidateProfileSkill(modelBuilder);
+        ConfigureCandidateProfileSkill(modelBuilder);
         ConfigureCompany(modelBuilder);
         ConfigureJob(modelBuilder);
         ConfigureJobSkill(modelBuilder);
@@ -111,45 +111,45 @@ public class JobPortalDbContext : DbContext
         });
     }
     private static void ConfigureSkill(ModelBuilder modelBuilder)
-{
-    modelBuilder.Entity<Skill>(entity =>
     {
-        entity.HasKey(skill => skill.SkillId);
-
-        entity.Property(skill => skill.Name)
-            .HasMaxLength(100)
-            .IsRequired();
-
-        entity.HasIndex(skill => skill.Name)
-            .IsUnique();
-    });
-}
-
-private static void ConfigureCandidateProfileSkill(
-    ModelBuilder modelBuilder)
-{
-    modelBuilder.Entity<CandidateProfileSkill>(entity =>
-    {
-        entity.HasKey(candidateSkill => new
+        modelBuilder.Entity<Skill>(entity =>
         {
-            candidateSkill.CandidateProfileId,
-            candidateSkill.SkillId
+            entity.HasKey(skill => skill.SkillId);
+
+            entity.Property(skill => skill.Name)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.HasIndex(skill => skill.Name)
+                .IsUnique();
         });
+    }
 
-        entity.HasIndex(candidateSkill => candidateSkill.SkillId);
+    private static void ConfigureCandidateProfileSkill(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CandidateProfileSkill>(entity =>
+        {
+            entity.HasKey(candidateSkill => new
+            {
+                candidateSkill.CandidateProfileId,
+                candidateSkill.SkillId
+            });
 
-        entity.HasOne(candidateSkill => candidateSkill.CandidateProfile)
-            .WithMany(profile => profile.CandidateProfileSkills)
-            .HasForeignKey(candidateSkill =>
-                candidateSkill.CandidateProfileId)
-            .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(candidateSkill => candidateSkill.SkillId);
 
-        entity.HasOne(candidateSkill => candidateSkill.Skill)
-            .WithMany(skill => skill.CandidateProfileSkills)
-            .HasForeignKey(candidateSkill => candidateSkill.SkillId)
-            .OnDelete(DeleteBehavior.Cascade);
-    });
-}
+            entity.HasOne(candidateSkill => candidateSkill.CandidateProfile)
+                .WithMany(profile => profile.CandidateProfileSkills)
+                .HasForeignKey(candidateSkill =>
+                    candidateSkill.CandidateProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(candidateSkill => candidateSkill.Skill)
+                .WithMany(skill => skill.CandidateProfileSkills)
+                .HasForeignKey(candidateSkill => candidateSkill.SkillId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+    }
     private static void ConfigureCompany(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Company>(entity =>
@@ -214,7 +214,8 @@ private static void ConfigureCandidateProfileSkill(
                 .IsRequired();
 
             entity.Property(job => job.JobType)
-                .HasMaxLength(50)
+                .HasConversion<string>()
+                .HasMaxLength(20)
                 .IsRequired();
 
             entity.Property(job => job.SalaryRange)
@@ -240,28 +241,28 @@ private static void ConfigureCandidateProfileSkill(
 
 
     private static void ConfigureJobSkill(ModelBuilder modelBuilder)
-{
-    modelBuilder.Entity<JobSkill>(entity =>
     {
-        entity.HasKey(jobSkill => new
+        modelBuilder.Entity<JobSkill>(entity =>
         {
-            jobSkill.JobId,
-            jobSkill.SkillId
+            entity.HasKey(jobSkill => new
+            {
+                jobSkill.JobId,
+                jobSkill.SkillId
+            });
+
+            entity.HasIndex(jobSkill => jobSkill.SkillId);
+
+            entity.HasOne(jobSkill => jobSkill.Job)
+                .WithMany(job => job.JobSkills)
+                .HasForeignKey(jobSkill => jobSkill.JobId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(jobSkill => jobSkill.Skill)
+                .WithMany(skill => skill.JobSkills)
+                .HasForeignKey(jobSkill => jobSkill.SkillId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
-
-        entity.HasIndex(jobSkill => jobSkill.SkillId);
-
-        entity.HasOne(jobSkill => jobSkill.Job)
-            .WithMany(job => job.JobSkills)
-            .HasForeignKey(jobSkill => jobSkill.JobId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        entity.HasOne(jobSkill => jobSkill.Skill)
-            .WithMany(skill => skill.JobSkills)
-            .HasForeignKey(jobSkill => jobSkill.SkillId)
-            .OnDelete(DeleteBehavior.Cascade);
-    });
-}
+    }
 
     private static void ConfigureApplication(ModelBuilder modelBuilder)
     {

@@ -26,6 +26,21 @@ public class JobsController : ControllerBase
     public async Task<ActionResult<JobListResponse>> Search(
         [FromQuery] JobSearchRequest request)
     {
+        if (request.Page is < 1 or > 10000)
+        {
+            return BadRequest(new
+            {
+                message = "Page must be between 1 and 10000."
+            });
+        }
+
+        if (request.PageSize is < 1 or > 100)
+        {
+            return BadRequest(new
+            {
+                message = "Page size must be between 1 and 100."
+            });
+        }
         var now = DateTime.UtcNow;
 
         var query = _dbContext.Jobs
@@ -40,26 +55,24 @@ public class JobsController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(request.Title))
         {
-            var title = request.Title.Trim().ToLower();
+            var title = request.Title.Trim();
 
             query = query.Where(job =>
-                job.Title.ToLower().Contains(title));
+                EF.Functions.ILike(job.Title, $"%{title}%"));
         }
 
         if (!string.IsNullOrWhiteSpace(request.Location))
         {
-            var location = request.Location.Trim().ToLower();
+            var location = request.Location.Trim();
 
             query = query.Where(job =>
-                job.Location.ToLower().Contains(location));
+                EF.Functions.ILike(job.Location, $"%{location}%"));
         }
 
-        if (!string.IsNullOrWhiteSpace(request.JobType))
+        if (request.JobType.HasValue)
         {
-            var jobType = request.JobType.Trim().ToLower();
-
             query = query.Where(job =>
-                job.JobType.ToLower() == jobType);
+                job.JobType == request.JobType.Value);
         }
 
         if (request.ExperienceYears.HasValue)
@@ -71,9 +84,12 @@ public class JobsController : ControllerBase
 
         var totalCount = await query.CountAsync();
 
+        var recordsToSkip =
+             (long)(request.Page - 1) * request.PageSize;
+
         var jobs = await query
             .OrderByDescending(job => job.CreatedAt)
-            .Skip((request.Page - 1) * request.PageSize)
+            .Skip((int)recordsToSkip)
             .Take(request.PageSize)
             .ToListAsync();
 
@@ -131,10 +147,9 @@ public class JobsController : ControllerBase
 
         if (!await IsActiveEmployer(employerUserId.Value))
         {
-            return Unauthorized(new
-            {
-                message = "Employer account is unavailable."
-            });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = "Employer account is unavailable." });
         }
 
         var company = await _dbContext.Companies
@@ -173,10 +188,9 @@ public class JobsController : ControllerBase
 
         if (!await IsActiveEmployer(employerUserId.Value))
         {
-            return Unauthorized(new
-            {
-                message = "Employer account is unavailable."
-            });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = "Employer account is unavailable." });
         }
 
         var company = await _dbContext.Companies
@@ -196,18 +210,14 @@ public class JobsController : ControllerBase
             });
         }
 
-        var validationResult = await ValidateRequest(request);
+        var validation = await ValidateRequest(request);
 
-        if (validationResult is not null)
+        if (validation.Error is not null)
         {
-            return validationResult;
+            return validation.Error;
         }
 
-        var skillIds = request.SkillIds.Distinct().ToList();
-
-        var skills = await _dbContext.Skills
-            .Where(skill => skillIds.Contains(skill.SkillId))
-            .ToListAsync();
+        var skills = validation.Skills;
 
         var now = DateTime.UtcNow;
 
@@ -218,14 +228,14 @@ public class JobsController : ControllerBase
             Title = request.Title.Trim(),
             Description = request.Description.Trim(),
             Location = request.Location.Trim(),
-            JobType = request.JobType.Trim(),
+            JobType = request.JobType,
             ExperienceRequiredYears =
                 request.ExperienceRequiredYears,
             SalaryRange = string.IsNullOrWhiteSpace(
                 request.SalaryRange)
                 ? null
                 : request.SalaryRange.Trim(),
-            ApplicationDeadline = request.ApplicationDeadline,
+            ApplicationDeadline = request.ApplicationDeadline.UtcDateTime,
             Status = JobStatus.Open,
             CreatedAt = now,
             UpdatedAt = now
@@ -263,10 +273,9 @@ public class JobsController : ControllerBase
 
         if (!await IsActiveEmployer(employerUserId.Value))
         {
-            return Unauthorized(new
-            {
-                message = "Employer account is unavailable."
-            });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = "Employer account is unavailable." });
         }
 
         var company = await _dbContext.Companies
@@ -299,30 +308,27 @@ public class JobsController : ControllerBase
             return NotFound(new { message = "Job was not found." });
         }
 
-        var validationResult = await ValidateRequest(request);
+        var validation = await ValidateRequest(request);
 
-        if (validationResult is not null)
+        if (validation.Error is not null)
         {
-            return validationResult;
+            return validation.Error;
         }
 
-        var skillIds = request.SkillIds.Distinct().ToList();
-
-        var skills = await _dbContext.Skills
-            .Where(skill => skillIds.Contains(skill.SkillId))
-            .ToListAsync();
-
+        var skillIds = validation.SkillIds;
+        var skills = validation.Skills;
         job.Title = request.Title.Trim();
         job.Description = request.Description.Trim();
         job.Location = request.Location.Trim();
-        job.JobType = request.JobType.Trim();
+        job.JobType = request.JobType;
         job.ExperienceRequiredYears =
             request.ExperienceRequiredYears;
         job.SalaryRange = string.IsNullOrWhiteSpace(
             request.SalaryRange)
             ? null
             : request.SalaryRange.Trim();
-        job.ApplicationDeadline = request.ApplicationDeadline;
+        job.ApplicationDeadline =
+             request.ApplicationDeadline.UtcDateTime;
         job.UpdatedAt = DateTime.UtcNow;
 
         var obsoleteMappings = job.JobSkills
@@ -367,10 +373,9 @@ public class JobsController : ControllerBase
 
         if (!await IsActiveEmployer(employerUserId.Value))
         {
-            return Unauthorized(new
-            {
-                message = "Employer account is unavailable."
-            });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = "Employer account is unavailable." });
         }
 
         if (!Enum.IsDefined(request.Status))
@@ -429,56 +434,93 @@ public class JobsController : ControllerBase
         return Ok(ToResponse(job));
     }
 
-    private async Task<ActionResult<JobResponse>?> ValidateRequest(
+    private async Task<(
+    ActionResult<JobResponse>? Error,
+    List<Skill> Skills,
+    List<int> SkillIds)> ValidateRequest(
         UpsertJobRequest request)
     {
-        if (request.ApplicationDeadline <= DateTime.UtcNow)
+        if (!Enum.IsDefined(request.JobType))
         {
-            return BadRequest(new
-            {
-                message = "Application deadline must be in the future."
-            });
+            return (
+                BadRequest(new { message = "Invalid job type." }),
+                [],
+                []);
+        }
+
+        if (request.ApplicationDeadline.Offset != TimeSpan.Zero)
+        {
+            return (
+                BadRequest(new
+                {
+                    message = "Application deadline must be provided in UTC."
+                }),
+                [],
+                []);
+        }
+
+        if (request.ApplicationDeadline <= DateTimeOffset.UtcNow)
+        {
+            return (
+                BadRequest(new
+                {
+                    message = "Application deadline must be in the future."
+                }),
+                [],
+                []);
         }
 
         if (request.SkillIds is null || request.SkillIds.Count == 0)
         {
-            return BadRequest(new
-            {
-                message = "At least one skill is required."
-            });
+            return (
+                BadRequest(new
+                {
+                    message = "At least one skill is required."
+                }),
+                [],
+                []);
         }
 
-        var skillIds = request.SkillIds.Distinct().ToList();
+        var skillIds = request.SkillIds
+            .Distinct()
+            .ToList();
 
         if (skillIds.Any(skillId => skillId <= 0))
         {
-            return BadRequest(new
-            {
-                message = "Skill IDs must be positive."
-            });
+            return (
+                BadRequest(new
+                {
+                    message = "Skill IDs must be positive."
+                }),
+                [],
+                []);
         }
 
-        var existingSkillIds = await _dbContext.Skills
+        var skills = await _dbContext.Skills
             .Where(skill => skillIds.Contains(skill.SkillId))
-            .Select(skill => skill.SkillId)
             .ToListAsync();
 
-        if (existingSkillIds.Count != skillIds.Count)
+        if (skills.Count != skillIds.Count)
         {
+            var existingSkillIds = skills
+                .Select(skill => skill.SkillId);
+
             var missingSkillIds = skillIds
                 .Except(existingSkillIds)
                 .ToList();
 
-            return BadRequest(new
-            {
-                message = "One or more skills do not exist.",
-                missingSkillIds
-            });
+            return (
+                BadRequest(new
+                {
+                    message = "One or more skills do not exist.",
+                    missingSkillIds
+                }),
+                [],
+                []);
         }
 
-        return null;
+        return (null, skills, skillIds);
     }
-
     private int? GetUserId()
     {
         var userIdValue =

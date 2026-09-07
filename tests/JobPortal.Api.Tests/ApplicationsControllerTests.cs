@@ -287,7 +287,7 @@ public class ApplicationsControllerTests
             Title = "Junior .NET Developer",
             Description = "Develop APIs.",
             Location = "Hyderabad",
-            JobType = "Full-time",
+            JobType = JobType.FullTime,
             ExperienceRequiredYears = 1,
             SalaryRange = "3-5 LPA",
             ApplicationDeadline = DateTime.UtcNow.AddDays(30),

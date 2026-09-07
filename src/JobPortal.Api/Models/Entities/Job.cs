@@ -14,7 +14,7 @@ public class Job
 
     public string Location { get; set; } = string.Empty;
 
-    public string JobType { get; set; } = string.Empty;
+    public JobType JobType { get; set; }
 
     public int ExperienceRequiredYears { get; set; }
 

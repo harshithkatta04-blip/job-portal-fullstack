@@ -169,61 +169,163 @@ public class JobsControllerTests
             userId: 1);
 
         var request = CreateValidRequest();
-        request.SkillIds = [1];
+request.Title = "Unauthorized title change";
+request.Location = "Bengaluru";
+request.JobType = JobType.Contract;
+request.SkillIds = [1];
 
-        var result = await controller.Update(
-            secondCompanyJob.JobId,
-            request);
+var result = await controller.Update(
+    secondCompanyJob.JobId,
+    request);
 
-        Assert.IsType<NotFoundObjectResult>(result.Result);
+Assert.IsType<NotFoundObjectResult>(result.Result);
 
-        Assert.Equal(
-            secondCompany.CompanyId,
-            secondCompanyJob.CompanyId);
-    }
+var unchangedJob = await dbContext.Jobs
+    .AsNoTracking()
+    .SingleAsync(job =>
+        job.JobId == secondCompanyJob.JobId);
 
-    [Fact]
-    public async Task UpdateStatus_OwnJob_ClosesJob()
-    {
-        await using var dbContext = CreateDbContext();
-        await SeedEmployerCompanyAndSkills(dbContext);
+Assert.Equal("Junior .NET Developer", unchangedJob.Title);
+Assert.Equal("Hyderabad", unchangedJob.Location);
+Assert.Equal(JobType.FullTime, unchangedJob.JobType);
+Assert.Equal(
+    secondCompany.CompanyId,
+    unchangedJob.CompanyId);
 
-        var company = await dbContext.Companies.SingleAsync();
-
-        var job = CreateJob(
-            jobId: 1,
-            company,
-            JobStatus.Open,
-            DateTime.UtcNow.AddDays(10));
-
-        dbContext.Jobs.Add(job);
-        await dbContext.SaveChangesAsync();
-
-        var controller = CreateEmployerController(
-            dbContext,
-            userId: 1);
-
-        var request = new UpdateJobStatusRequest
+Assert.Empty(dbContext.JobSkills);
+}
+        [Fact]
+        public async Task UpdateStatus_OwnJob_ClosesJob()
         {
-            Status = JobStatus.Closed
-        };
+            await using var dbContext = CreateDbContext();
+            await SeedEmployerCompanyAndSkills(dbContext);
 
-        var result = await controller.UpdateStatus(
-            job.JobId,
-            request);
+            var company = await dbContext.Companies.SingleAsync();
 
-        var okResult = Assert.IsType<OkObjectResult>(
-            result.Result);
+            var job = CreateJob(
+                jobId: 1,
+                company,
+                JobStatus.Open,
+                DateTime.UtcNow.AddDays(10));
 
-        var response = Assert.IsType<JobResponse>(
-            okResult.Value);
+            dbContext.Jobs.Add(job);
+            await dbContext.SaveChangesAsync();
 
-        Assert.Equal(JobStatus.Closed, response.Status);
+            var controller = CreateEmployerController(
+                dbContext,
+                userId: 1);
 
-        var savedJob = await dbContext.Jobs.SingleAsync();
+            var request = new UpdateJobStatusRequest
+            {
+                Status = JobStatus.Closed
+            };
 
-        Assert.Equal(JobStatus.Closed, savedJob.Status);
-    }
+            var result = await controller.UpdateStatus(
+                job.JobId,
+                request);
+
+            var okResult = Assert.IsType<OkObjectResult>(
+                result.Result);
+
+            var response = Assert.IsType<JobResponse>(
+                okResult.Value);
+
+            Assert.Equal(JobStatus.Closed, response.Status);
+
+            var savedJob = await dbContext.Jobs.SingleAsync();
+
+            Assert.Equal(JobStatus.Closed, savedJob.Status);
+        }
+        [Fact]
+        public async Task Search_PageAboveLimit_ReturnsBadRequest()
+        {
+            await using var dbContext = CreateDbContext();
+            var controller = new JobsController(dbContext);
+
+            var request = new JobSearchRequest
+            {
+                Page = 10001,
+                PageSize = 20
+            };
+
+            var result = await controller.Search(request);
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+        }
+        [Fact]
+        public async Task Update_ReplacesJobSkillsWithoutDuplicates()
+        {
+            await using var dbContext = CreateDbContext();
+            await SeedEmployerCompanyAndSkills(dbContext);
+
+            dbContext.Skills.Add(new Skill
+            {
+                SkillId = 3,
+                Name = "PostgreSQL"
+            });
+
+            var company = await dbContext.Companies.SingleAsync();
+
+            var job = CreateJob(
+                jobId: 1,
+                company,
+                JobStatus.Open,
+                DateTime.UtcNow.AddDays(20));
+
+            job.JobSkills.Add(new JobSkill
+            {
+                SkillId = 1
+            });
+
+            job.JobSkills.Add(new JobSkill
+            {
+                SkillId = 2
+            });
+
+            dbContext.Jobs.Add(job);
+            await dbContext.SaveChangesAsync();
+
+            var controller = CreateEmployerController(
+                dbContext,
+                userId: 1);
+
+            var request = CreateValidRequest();
+            request.SkillIds = [2, 3];
+
+            var result = await controller.Update(job.JobId, request);
+
+            Assert.IsType<OkObjectResult>(result.Result);
+
+            var savedSkillIds = await dbContext.JobSkills
+                .Where(mapping => mapping.JobId == job.JobId)
+                .OrderBy(mapping => mapping.SkillId)
+                .Select(mapping => mapping.SkillId)
+                .ToListAsync();
+
+            Assert.Equal([2, 3], savedSkillIds);
+        }
+
+
+        [Fact]
+public async Task Create_NonUtcDeadline_ReturnsBadRequest()
+{
+    await using var dbContext = CreateDbContext();
+    await SeedEmployerCompanyAndSkills(dbContext);
+
+    var controller = CreateEmployerController(
+        dbContext,
+        userId: 1);
+
+    var request = CreateValidRequest();
+    request.ApplicationDeadline = DateTimeOffset.UtcNow
+        .AddDays(30)
+        .ToOffset(TimeSpan.FromHours(5.5));
+
+    var result = await controller.Create(request);
+
+    Assert.IsType<BadRequestObjectResult>(result.Result);
+    Assert.Empty(dbContext.Jobs);
+}
 
     private static UpsertJobRequest CreateValidRequest()
     {
@@ -232,7 +334,7 @@ public class JobsControllerTests
             Title = "Junior .NET Developer",
             Description = "Develop ASP.NET Core APIs.",
             Location = "Hyderabad",
-            JobType = "Full-time",
+            JobType = JobType.FullTime,
             ExperienceRequiredYears = 1,
             SalaryRange = "3-5 LPA",
             ApplicationDeadline = DateTime.UtcNow.AddDays(30),
@@ -283,7 +385,7 @@ public class JobsControllerTests
             Title = "Junior .NET Developer",
             Description = "Develop APIs.",
             Location = "Hyderabad",
-            JobType = "Full-time",
+            JobType = JobType.FullTime,
             ExperienceRequiredYears = 1,
             SalaryRange = "3-5 LPA",
             ApplicationDeadline = deadline,

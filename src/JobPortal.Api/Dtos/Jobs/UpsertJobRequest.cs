@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-
+using JobPortal.Api.Models.Enums;
 namespace JobPortal.Api.Dtos.Jobs;
 
 public class UpsertJobRequest
@@ -17,8 +17,7 @@ public class UpsertJobRequest
     public string Location { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(50)]
-    public string JobType { get; set; } = string.Empty;
+    public JobType JobType { get; set; }
 
     [Range(0, 100)]
     public int ExperienceRequiredYears { get; set; }
@@ -26,7 +25,7 @@ public class UpsertJobRequest
     [MaxLength(50)]
     public string? SalaryRange { get; set; }
 
-    public DateTime ApplicationDeadline { get; set; }
+    public DateTimeOffset ApplicationDeadline { get; set; }
 
     [Required]
     [MinLength(1)]

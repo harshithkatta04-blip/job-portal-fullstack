@@ -55,18 +55,24 @@ public class JobsController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(request.Title))
         {
-            var title = request.Title.Trim();
+            var title = EscapeLikePattern(request.Title.Trim());
 
             query = query.Where(job =>
-                EF.Functions.ILike(job.Title, $"%{title}%"));
+                EF.Functions.ILike(
+                    job.Title,
+                    $"%{title}%",
+                    "\\"));
         }
 
         if (!string.IsNullOrWhiteSpace(request.Location))
         {
-            var location = request.Location.Trim();
+            var location = EscapeLikePattern(request.Location.Trim());
 
             query = query.Where(job =>
-                EF.Functions.ILike(job.Location, $"%{location}%"));
+                EF.Functions.ILike(
+                    job.Location,
+                    $"%{location}%",
+                    "\\"));
         }
 
         if (request.JobType.HasValue)
@@ -435,10 +441,10 @@ public class JobsController : ControllerBase
     }
 
     private async Task<(
-    ActionResult<JobResponse>? Error,
-    List<Skill> Skills,
-    List<int> SkillIds)> ValidateRequest(
-        UpsertJobRequest request)
+        ActionResult<JobResponse>? Error,
+        List<Skill> Skills,
+        List<int> SkillIds)> ValidateRequest(
+            UpsertJobRequest request)
     {
         if (!Enum.IsDefined(request.JobType))
         {
@@ -448,18 +454,7 @@ public class JobsController : ControllerBase
                 []);
         }
 
-        if (request.ApplicationDeadline.Offset != TimeSpan.Zero)
-        {
-            return (
-                BadRequest(new
-                {
-                    message = "Application deadline must be provided in UTC."
-                }),
-                [],
-                []);
-        }
-
-        if (request.ApplicationDeadline <= DateTimeOffset.UtcNow)
+        if (request.ApplicationDeadline.UtcDateTime <= DateTime.UtcNow)
         {
             return (
                 BadRequest(new
@@ -520,6 +515,14 @@ public class JobsController : ControllerBase
         }
 
         return (null, skills, skillIds);
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("\\", "\\\\")
+            .Replace("%", "\\%")
+            .Replace("_", "\\_");
     }
     private int? GetUserId()
     {

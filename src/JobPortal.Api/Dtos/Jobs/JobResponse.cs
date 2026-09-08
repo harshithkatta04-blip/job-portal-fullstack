@@ -1,12 +1,14 @@
 using JobPortal.Api.Models.Enums;
 
-namespace JobPortal.Api.Models.Entities;
+namespace JobPortal.Api.Dtos.Jobs;
 
-public class Job
+public class JobResponse
 {
     public int JobId { get; set; }
 
     public int CompanyId { get; set; }
+
+    public string CompanyName { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
 
@@ -22,14 +24,11 @@ public class Job
 
     public DateTime ApplicationDeadline { get; set; }
 
-    public JobStatus Status { get; set; } = JobStatus.Open;
+    public JobStatus Status { get; set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; }
 
-    public ICollection<JobSkill> JobSkills { get; set; }
-         = new List<JobSkill>();
-
-    public Company Company { get; set; } = null!;
+    public List<JobSkillResponse> Skills { get; set; } = [];
 }

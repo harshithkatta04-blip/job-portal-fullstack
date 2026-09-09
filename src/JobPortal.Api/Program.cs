@@ -55,6 +55,17 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:5173")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services
     .AddControllers()
     .AddJsonOptions(options =>
@@ -64,22 +75,23 @@ builder.Services
     });
 
 builder.Services.AddSwaggerGen(options =>
-   { options.CustomSchemaIds(type =>
+   {
+       options.CustomSchemaIds(type =>
          type.FullName!.Replace('+', '.'));
-    options.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        Description = "Enter the JWT token only."
-    });
+       options.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
+       {
+           Type = SecuritySchemeType.Http,
+           Scheme = "bearer",
+           BearerFormat = "JWT",
+           Description = "Enter the JWT token only."
+       });
 
-    options.AddSecurityRequirement(document =>
-        new OpenApiSecurityRequirement
-        {
-            [new OpenApiSecuritySchemeReference("bearer", document)] = []
-        });
-});
+       options.AddSecurityRequirement(document =>
+           new OpenApiSecurityRequirement
+           {
+               [new OpenApiSecuritySchemeReference("bearer", document)] = []
+           });
+   });
 
 var app = builder.Build();
 
@@ -90,6 +102,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

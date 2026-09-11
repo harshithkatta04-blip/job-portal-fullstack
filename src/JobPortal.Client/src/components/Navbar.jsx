@@ -12,10 +12,10 @@ function Navbar() {
 
   return (
     <header>
-      <nav>
+      <nav className="navbar">
         <Link to="/">Job Portal</Link>
 
-        <div>
+        <div className="navbar-links">
           <Link to="/jobs">Jobs</Link>
 
           {user?.role === 'Candidate' && (

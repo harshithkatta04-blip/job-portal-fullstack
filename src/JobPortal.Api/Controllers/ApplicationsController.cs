@@ -42,7 +42,7 @@ public class ApplicationsController : ControllerBase
 
         if (candidate is null)
         {
-            return Unauthorized(new
+            return StatusCode(StatusCodes.Status403Forbidden, new
             {
                 message = "Candidate account is unavailable."
             });
@@ -95,7 +95,7 @@ public class ApplicationsController : ControllerBase
         {
             return Conflict(new
             {
-                message = "You have already applied for this Job."
+                message = "you have already applied for this job and withdrawn; re-applying isn't possible"
             });
         }
 
@@ -118,17 +118,30 @@ public class ApplicationsController : ControllerBase
         };
 
         _dbContext.Applications.Add(application);
-        await _dbContext.SaveChangesAsync();
 
-        return CreatedAtAction(
-            nameof(GetMine),
-            null,
-            ToResponse(application));
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            _dbContext.Entry(application).State = EntityState.Detached;
+
+            return Conflict(new
+            {
+                message = "An application already exists for this job. Withdrawn applications cannot be submitted again."
+            });
+        }
+
+        return StatusCode(
+           StatusCodes.Status201Created,
+           ToResponse(application));
     }
 
     [Authorize(Roles = nameof(UserRole.Candidate))]
     [HttpGet("me")]
-    public async Task<ActionResult<List<ApplicationResponse>>> GetMine()
+    public async Task<ActionResult<ApplicationListResponse>> GetMine(
+    [FromQuery] ApplicationListRequest request)
     {
         var candidateUserId = GetUserId();
 
@@ -139,33 +152,43 @@ public class ApplicationsController : ControllerBase
 
         if (!await IsActiveCandidate(candidateUserId.Value))
         {
-            return Unauthorized(new
+            return StatusCode(StatusCodes.Status403Forbidden, new
             {
                 message = "Candidate account is unavailable."
             });
         }
 
-        var applications = await _dbContext.Applications
+        var query = _dbContext.Applications
             .AsNoTracking()
+            .Where(application =>
+                application.CandidateUserId == candidateUserId.Value);
+
+        var totalCount = await query.CountAsync();
+
+        var applications = await query
             .Include(application => application.Job)
             .ThenInclude(job => job.Company)
             .Include(application => application.CandidateUser)
-            .Where(application =>
-                application.CandidateUserId ==
-                    candidateUserId.Value)
-            .OrderByDescending(application =>
-                application.AppliedAt)
+            .OrderByDescending(application => application.AppliedAt)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
             .ToListAsync();
 
-        return Ok(applications
-            .Select(ToResponse)
-            .ToList());
+        return Ok(new ApplicationListResponse
+        {
+            Items = applications.Select(ToResponse).ToList(),
+            Page = request.Page,
+            PageSize = request.PageSize,
+            TotalCount = totalCount,
+            TotalPages = (int)Math.Ceiling(
+                totalCount / (double)request.PageSize)
+        });
     }
-
     [Authorize(Roles = nameof(UserRole.Employer))]
     [HttpGet("~/api/jobs/{jobId:int}/applications")]
-    public async Task<ActionResult<List<ApplicationResponse>>>
-        GetForJob(int jobId)
+    public async Task<ActionResult<ApplicationListResponse>> GetForJob(
+    int jobId,
+    [FromQuery] ApplicationListRequest request)
     {
         var employerUserId = GetUserId();
 
@@ -176,7 +199,7 @@ public class ApplicationsController : ControllerBase
 
         if (!await IsActiveEmployer(employerUserId.Value))
         {
-            return Unauthorized(new
+            return StatusCode(StatusCodes.Status403Forbidden, new
             {
                 message = "Employer account is unavailable."
             });
@@ -185,29 +208,38 @@ public class ApplicationsController : ControllerBase
         var ownsJob = await _dbContext.Jobs
             .AnyAsync(job =>
                 job.JobId == jobId &&
-                job.Company.EmployerUserId ==
-                    employerUserId.Value);
+                job.Company.EmployerUserId == employerUserId.Value);
 
         if (!ownsJob)
         {
             return NotFound(new { message = "Job was not found." });
         }
 
-        var applications = await _dbContext.Applications
+        var query = _dbContext.Applications
             .AsNoTracking()
+            .Where(application => application.JobId == jobId);
+
+        var totalCount = await query.CountAsync();
+
+        var applications = await query
             .Include(application => application.Job)
             .ThenInclude(job => job.Company)
             .Include(application => application.CandidateUser)
-            .Where(application => application.JobId == jobId)
-            .OrderByDescending(application =>
-                application.AppliedAt)
+            .OrderByDescending(application => application.AppliedAt)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
             .ToListAsync();
 
-        return Ok(applications
-            .Select(ToResponse)
-            .ToList());
+        return Ok(new ApplicationListResponse
+        {
+            Items = applications.Select(ToResponse).ToList(),
+            Page = request.Page,
+            PageSize = request.PageSize,
+            TotalCount = totalCount,
+            TotalPages = (int)Math.Ceiling(
+                totalCount / (double)request.PageSize)
+        });
     }
-
     [Authorize(Roles = nameof(UserRole.Employer))]
     [HttpPatch("{applicationId:int}/status")]
     public async Task<ActionResult<ApplicationResponse>> UpdateStatus(
@@ -223,9 +255,9 @@ public class ApplicationsController : ControllerBase
 
         if (!await IsActiveEmployer(employerUserId.Value))
         {
-            return Unauthorized(new
+            return StatusCode(StatusCodes.Status403Forbidden, new
             {
-                message = "Employer account is unavailable."
+                message = "Employeraccount is unavailable."
             });
         }
 
@@ -286,7 +318,7 @@ public class ApplicationsController : ControllerBase
 
         if (!await IsActiveCandidate(candidateUserId.Value))
         {
-            return Unauthorized(new
+            return StatusCode(StatusCodes.Status403Forbidden, new
             {
                 message = "Candidate account is unavailable."
             });

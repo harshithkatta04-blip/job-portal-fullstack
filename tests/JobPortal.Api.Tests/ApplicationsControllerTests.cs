@@ -30,8 +30,12 @@ public class ApplicationsControllerTests
 
         var result = await controller.Apply(1, request);
 
-        var createdResult = Assert.IsType<CreatedAtActionResult>(
-            result.Result);
+        var createdResult = Assert.IsType<ObjectResult>(
+             result.Result);
+
+        Assert.Equal(
+            StatusCodes.Status201Created,
+            createdResult.StatusCode);
 
         var response = Assert.IsType<ApplicationResponse>(
             createdResult.Value);
@@ -98,6 +102,32 @@ public class ApplicationsControllerTests
     }
 
     [Fact]
+    public async Task Apply_AfterWithdrawal_ReturnsConflict()
+    {
+        await using var dbContext = CreateDbContext();
+        await SeedBaseData(dbContext);
+        await SeedApplication(dbContext);
+
+        var existingApplication =
+            await dbContext.Applications.SingleAsync();
+
+        existingApplication.Status = ApplicationStatus.Withdrawn;
+        await dbContext.SaveChangesAsync();
+
+        var controller = CreateController(
+            dbContext,
+            userId: 1,
+            UserRole.Candidate);
+
+        var result = await controller.Apply(
+            1,
+            new ApplyJobRequest());
+
+        Assert.IsType<ConflictObjectResult>(result.Result);
+        Assert.Equal(1, await dbContext.Applications.CountAsync());
+    }
+
+    [Fact]
     public async Task GetForJob_OwningEmployer_ReturnsApplicants()
     {
         await using var dbContext = CreateDbContext();
@@ -109,14 +139,20 @@ public class ApplicationsControllerTests
             userId: 2,
             UserRole.Employer);
 
-        var result = await controller.GetForJob(1);
-
+        var result = await controller.GetForJob(
+    1,
+    new ApplicationListRequest());
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
 
-        var response = Assert.IsType<List<ApplicationResponse>>(
-            okResult.Value);
+        var response = Assert.IsType<ApplicationListResponse>(
+    okResult.Value);
 
-        var application = Assert.Single(response);
+        var application = Assert.Single(response.Items);
+
+        Assert.Equal(1, response.Page);
+        Assert.Equal(20, response.PageSize);
+        Assert.Equal(1, response.TotalCount);
+        Assert.Equal(1, response.TotalPages);
 
         Assert.Equal("Test Candidate", application.CandidateName);
         Assert.Equal(
@@ -149,8 +185,9 @@ public class ApplicationsControllerTests
             userId: 3,
             UserRole.Employer);
 
-        var result = await controller.GetForJob(1);
-
+        var result = await controller.GetForJob(
+    1,
+    new ApplicationListRequest());
         Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 
@@ -221,8 +258,139 @@ public class ApplicationsControllerTests
             savedApplication.Status);
     }
 
+    [Fact]
+    public async Task GetMine_WithPagination_ReturnsRequestedPage()
+    {
+        await using var dbContext = CreateDbContext();
+        await SeedBaseData(dbContext);
+        await SeedApplication(dbContext);
+
+        var firstApplication =
+            await dbContext.Applications.SingleAsync();
+
+        firstApplication.AppliedAt =
+            new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        dbContext.Jobs.Add(new Job
+        {
+            JobId = 2,
+            CompanyId = 1,
+            Title = "Senior .NET Developer",
+            Description = "Develop backend services.",
+            Location = "Bengaluru",
+            JobType = JobType.FullTime,
+            ExperienceRequiredYears = 3,
+            SalaryRange = "8-10 LPA",
+            ApplicationDeadline = DateTime.UtcNow.AddDays(30),
+            Status = JobStatus.Open
+        });
+
+        dbContext.Applications.Add(new Application
+        {
+            ApplicationId = 2,
+            JobId = 2,
+            CandidateUserId = 1,
+            ResumeUrl = "https://example.com/resume.pdf",
+            CoverLetter = "Second application",
+            Status = ApplicationStatus.Applied,
+            AppliedAt =
+                new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc)
+        });
+
+        await dbContext.SaveChangesAsync();
+
+        var controller = CreateController(
+            dbContext,
+            userId: 1,
+            UserRole.Candidate);
+
+        var request = new ApplicationListRequest
+        {
+            Page = 2,
+            PageSize = 1
+        };
+
+        var result = await controller.GetMine(request);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<ApplicationListResponse>(
+            okResult.Value);
+
+        var application = Assert.Single(response.Items);
+
+        Assert.Equal(1, application.JobId);
+        Assert.Equal(2, response.Page);
+        Assert.Equal(1, response.PageSize);
+        Assert.Equal(2, response.TotalCount);
+        Assert.Equal(2, response.TotalPages);
+    }
+
+    [Fact]
+    public async Task GetForJob_WithPagination_ReturnsRequestedPage()
+    {
+        await using var dbContext = CreateDbContext();
+        await SeedBaseData(dbContext);
+        await SeedApplication(dbContext);
+
+        var firstApplication =
+            await dbContext.Applications.SingleAsync();
+
+        firstApplication.AppliedAt =
+            new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        dbContext.Users.Add(new User
+        {
+            UserId = 3,
+            FullName = "Second Candidate",
+            Email = "second.candidate@example.com",
+            PasswordHash = "test-hash",
+            Role = UserRole.Candidate,
+            IsActive = true
+        });
+
+        dbContext.Applications.Add(new Application
+        {
+            ApplicationId = 2,
+            JobId = 1,
+            CandidateUserId = 3,
+            ResumeUrl = "https://example.com/second-resume.pdf",
+            CoverLetter = "Second candidate application",
+            Status = ApplicationStatus.Applied,
+            AppliedAt =
+                new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc)
+        });
+
+        await dbContext.SaveChangesAsync();
+
+        var controller = CreateController(
+            dbContext,
+            userId: 2,
+            UserRole.Employer);
+
+        var request = new ApplicationListRequest
+        {
+            Page = 2,
+            PageSize = 1
+        };
+
+        var result = await controller.GetForJob(1, request);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<ApplicationListResponse>(
+            okResult.Value);
+
+        var application = Assert.Single(response.Items);
+
+        Assert.Equal(1, application.ApplicationId);
+        Assert.Equal("Test Candidate", application.CandidateName);
+        Assert.Equal(2, response.Page);
+        Assert.Equal(1, response.PageSize);
+        Assert.Equal(2, response.TotalCount);
+        Assert.Equal(2, response.TotalPages);
+    }
+
     private static async Task SeedBaseData(
-        JobPortalDbContext dbContext)
+           JobPortalDbContext dbContext)
     {
         var candidate = new User
         {
